@@ -114,13 +114,74 @@ def encrypt_strings_in_code(code):
         i += 1
     new_code = ''.join(out)
     if used_encryption:
-        # inject decrypt function + import "encoding/base64" if not present
+        # 1) Ensure encoding/base64 is imported
         if 'encoding/base64' not in new_code:
-            new_code = re.sub(r'(?m)^import\s*\((.*?)\)', r'import (\1\n\t"encoding/base64")', new_code, count=1)
-            if 'import' not in new_code:
-                new_code = 'import "encoding/base64"\n' + new_code
-        new_code = generate_decrypt_function() + "\n" + new_code
+            # Case 1: import block exists
+            if re.search(r'(?m)^import\s*\(', new_code):
+                new_code = re.sub(
+                r'(?ms)^import\s*\((.*?)\)',
+                lambda m: f'import ({m.group(1)}\n\t"encoding/base64")',
+                new_code,
+                count=1
+            )
+            # Case 2: single-line import (rare)
+            elif re.search(r'(?m)^import\s+"[^"]+"', new_code):
+                new_code = re.sub(
+                    r'(?m)^import\s+"([^"]+)"',
+                    r'import (\n\t"\1"\n\t"encoding/base64"\n)',
+                    new_code,
+                    count=1
+                )
+            # Case 3: no import block at all — create a new one
+            else:
+                new_code = re.sub(
+                    r'(?m)^(package\s+\w+)',
+                    r'\1\n\nimport "encoding/base64"',
+                    new_code,
+                    count=1
+                )
+
+        # 2) Insert decryptString AFTER the import block OR after package if no import block exists
+        if re.search(r'(?ms)^import\s*\(', new_code):
+            new_code = re.sub(
+                r'(?ms)(^import\s*\(.*?\))',
+                r'\1\n\n' + generate_decrypt_function().strip(),
+                new_code,
+                count=1
+            )
+        elif re.search(r'(?m)^import\s+"[^"]+"', new_code):
+            # single-line import, insert after it
+            new_code = re.sub(
+                r'(?m)^(import\s+"[^"]+")',
+                r'\1\n\n' + generate_decrypt_function().strip(),
+                new_code,
+                count=1
+            )
+        else:
+            # no import block — insert after package declaration
+            new_code = re.sub(
+                r'(?m)^(package\s+\w+)',
+                r'\1\n\n' + generate_decrypt_function().strip(),
+                new_code,
+                count=1
+            )
+
+        # 3) Convert const -> var for decryptString calls
+        new_code = re.sub(
+            r'(?m)^const(\s*\([^)]*decryptString\([^)]*\)[^)]*\))',
+            r'var\1',
+            new_code
+        )
+        new_code = re.sub(
+            r'(?m)^const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(decryptString\([^)]*\))',
+            r'var \1 = \2',
+            new_code
+        )
+
+
     return new_code
+
+
 # ---------------------------
 # NEW EXTRA LAYERS
 # ---------------------------

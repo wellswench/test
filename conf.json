@@ -1,0 +1,9 @@
+{
+    "sensitive_strings": [
+        "http://192.168.117.131:5000",
+        "/get_command",
+        "/send_result",
+        "/put_file",
+        "/get_file"
+    ]
+}
